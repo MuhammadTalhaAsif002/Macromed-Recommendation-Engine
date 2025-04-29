@@ -5,9 +5,12 @@ import pandas as pd
 df=pd.read_csv("user_purchase_dataset.csv")
 st.title("🛍️ Surgical Products Catalog")
 
-# Show first 10 products
 for i, row in df.head(10).iterrows():
-    st.image(row["Image"], width=200)
+    if pd.notna(row["Image"]) and row["Image"].startswith("http"):
+        st.image(row["Image"], width=200)
+    else:
+        st.warning("No valid image available.")
+        
     st.subheader(row["Title"])
     st.write(f"**Category:** {row['Category']}")
     st.write(f"**Price:** ${row['Price']}")
