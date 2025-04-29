@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 
 # Load CSV
-df = pd.read_csv("your_file.csv")  # replace with your CSV filename
-
+df=pd.read_csv("/content/user_purchase_dataset.csv")
 st.title("🛍️ Surgical Products Catalog")
 
 # Show first 10 products
