@@ -2,8 +2,13 @@ import streamlit as st
 import pandas as pd
 
 # Load user and tool data
-users_df = pd.read_excel("surgical_tool_recommendation_users.xlsx")
-tools_df = pd.read_excel("surgical_tool_prices.xlsx")
+users_df = pd.read_excel(
+    "C:/Users/Dell/Desktop/Recommendation Systems/Macromed-Recommendation-Engine/Generated Data/surgical_tool_recommendation_users (5).xlsx"
+)
+tools_df = pd.read_excel(
+    "C:/Users/Dell/Desktop/Recommendation Systems/Macromed-Recommendation-Engine/Generated Data/surgical_tool_prices (5).xlsx"
+)
+
 
 # Budget filter logic
 budget_price_map = {
