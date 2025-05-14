@@ -7,6 +7,9 @@ import requests
 from PIL import Image
 from io import BytesIO
 
+# Set Streamlit page configuration to full width
+st.set_page_config(layout="wide")
+
 # Load the data
 @st.cache_data
 def load_data():
@@ -51,6 +54,11 @@ def get_valid_products(df, count):
                 break
     return pd.DataFrame(valid_products)
 
+# Ensure 'Title_URL' column exists before accessing it
+def safe_get_value(row, key, default="#"):
+    """Safely get a value from a row with a default fallback."""
+    return row[key] if key in row and not pd.isna(row[key]) else default
+
 df, top_df = load_data()
 
 # Custom CSS for professional look
@@ -87,6 +95,8 @@ st.markdown("""
         height: 100%;
         position: relative;
         background: white;
+        display: flex;
+        flex-direction: column;
     }
     
     .product-card:hover {
@@ -119,6 +129,61 @@ st.markdown("""
         background: #ff9800;
     }
     
+    .product-img {
+        position: relative;
+        height: 180px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    
+    .product-img img {
+        max-width: 100%;
+        max-height: 180px;
+        object-fit: contain;
+        border-radius: 5px;
+    }
+    
+    .no-image {
+        background-color: #f5f5f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 180px;
+        border-radius: 5px;
+        color: #999;
+        font-size: 14px;
+    }
+    
+    .product-content {
+        flex: 1; /* Makes this section grow to fill space */
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between; /* Pushes buttons to bottom */
+    }
+    
+    .category-tag {
+        background-color: #f0f8ff;
+        color: var(--primary);
+        padding: 3px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        display: inline-block;
+        margin-bottom: 8px;
+    }
+    
+    .product-title {
+        margin: 5px 0 10px;
+        font-size: 16px;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    
     .price {
         font-weight: bold;
         margin: 10px 0;
@@ -145,14 +210,27 @@ st.markdown("""
         margin-left: 5px;
     }
     
-    .category-tag {
-        background-color: #f0f8ff;
+    .footer-buttons {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 15px;
+    }
+    
+    .footer-buttons a {
+        text-decoration: none;
         color: var(--primary);
-        padding: 3px 10px;
-        border-radius: 15px;
-        font-size: 12px;
-        display: inline-block;
-        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 500;
+    }
+    
+    .footer-buttons button {
+        background: var(--primary);
+        color: white;
+        border: none;
+        padding: 5px 15px;
+        border-radius: 4px;
+        font-size: 14px;
+        cursor: pointer;
     }
     
     .section-header {
@@ -251,17 +329,59 @@ st.markdown("""
         margin-left: 5px;
     }
     
-    .no-image {
-        background-color: #f5f5f5;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 180px;
-        border-radius: 5px;
-        color: #999;
-        font-size: 14px;
+    .sidebar {
+        background: #f4f6f8;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+    }
+    
+    .sidebar h4 {
+        color: var(--primary);
+        margin-bottom: 1rem;
+    }
+    
+    .sidebar div {
+        margin-bottom: 1rem;
     }
 </style>
+""", unsafe_allow_html=True)
+
+# Sidebar
+st.sidebar.markdown("""
+<div class="sidebar">
+    <h4>Filters</h4>
+    <div>
+        <label>Category</label>
+        <select id="category_filter" class="stSelectbox" style="width: 100%">
+            <option value="All">All</option>
+            {category_options}
+        </select>
+    </div>
+    <div>
+        <label>Price Range ($)</label>
+        <input id="price_range" type="range" min="{min_price}" max="{max_price}" value="{default_price}" class="stSlider" style="width: 100%">
+    </div>
+    <div>
+        <label>Sort By</label>
+        <select id="sort_filter" class="stSelectbox" style="width: 100%">
+            <option value="Recommended">Recommended</option>
+            <option value="Price: Low to High">Price: Low to High</option>
+            <option value="Price: High to Low">Price: High to Low</option>
+            <option value="Discount %">Discount %</option>
+            <option value="Popularity">Popularity</option>
+        </select>
+    </div>
+    <div>
+        <label>Items per page</label>
+        <select id="pagination" class="stSelectbox" style="width: 100%">
+            <option value="6">6</option>
+            <option value="12">12</option>
+            <option value="24">24</option>
+        </select>
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
 # Header section
@@ -322,20 +442,20 @@ if not rec_df.empty:
             st.markdown(f"""
             <div class="product-card">
                 {badge}
-                <div style="position: relative; height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-                    <img src="{product['Image']}" style="max-width: 100%; max-height: 180px; object-fit: contain; border-radius: 5px;" onerror="this.style.display='none'; this.parentNode.innerHTML='<div class=\\'no-image\\'>Image not available</div>';">
+                <div class="product-img">
+                    <img src="{product['Image']}" onerror="this.style.display='none'; this.parentNode.innerHTML='<div class=\\'no-image\\'>Image not available</div>';">
                 </div>
                 <div class="category-tag">{product['Category']}</div>
-                <h4 style="margin: 5px 0 10px; font-size: 16px; line-height: 1.3;">{product['Title'][:50]}{'...' if len(product['Title']) > 50 else ''}</h4>
+                <div class="product-title">{product['Title'][:50]}{'...' if len(product['Title']) > 50 else ''}</div>
                 <div class="price">
                     <span class="original-price">${product['Price']:.2f}</span>
                     <span class="discounted-price">${product['discounted_price']:.2f}</span>
                     <span class="discount-badge">{discount_percent}% OFF</span>
                 </div>
-                {f'<div style="font-size: 12px; color: #666; margin: 5px 0;">Size: {product["Dimensions"]}</div>' if str(product["Dimensions"]) != "Not specified" else ""}
-                <div style="display: flex; justify-content: space-between; margin-top: 15px;">
-                    <a href="{product['Title_URL']}" target="_blank" style="text-decoration: none; color: var(--primary); font-size: 14px; font-weight: 500;">Details</a>
-                    <button onclick="window.open('{product['Type_URL']}', '_blank')" style="background: var(--primary); color: white; border: none; padding: 5px 15px; border-radius: 4px; font-size: 14px; cursor: pointer;">Add to Cart</button>
+                <div style="font-size: 12px; color: #666; margin: 5px 0;">Size: {product.get("Dimensions", "Not specified")}</div>
+                <div class="footer-buttons">
+                    <a href="{safe_get_value(product, 'Title_URL')}" target="_blank">Details</a>
+                    <button onclick="window.open('{safe_get_value(product, 'Type_URL')}', '_blank')">Add to Cart</button>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -351,48 +471,45 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Display trending products in a horizontal scroll
+# Display trending products in a grid format
 valid_top_products = get_valid_products(top_df.sort_values('Popularity_Score', ascending=False), 10)
 
 if not valid_top_products.empty:
-    st.markdown("""
-    <div class="horizontal-scroll">
-    """, unsafe_allow_html=True)
-
+    cols = st.columns(3)
     for idx, (_, product) in enumerate(valid_top_products.iterrows()):
-        discount_percent = int(round((product['Price'] - product['Price1']) / product['Price'] * 100))
-        
-        # Generate star rating display
-        stars = int(round(product['ratings']))
-        star_html = ''.join(['<span class="star">★</span>' for _ in range(stars)])
-        if stars < 5:
-            star_html += ''.join(['<span class="star" style="color: #ddd;">★</span>' for _ in range(5 - stars)])
-        
-        st.markdown(f"""
-        <div class="product-card product-card-horizontal">
-            <span class="badge top-badge">TOP {idx+1}</span>
-            <div style="position: relative; height: 120px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-                <img src="{product['Image']}" style="max-width: 100%; max-height: 120px; object-fit: contain; border-radius: 5px;" onerror="this.style.display='none'; this.parentNode.innerHTML='<div class=\\'no-image\\' style=\\'height:120px\\'>Image not available</div>';">
+        with cols[idx % 3]:
+            discount_percent = int(round((product['Price'] - product['Price1']) / product['Price'] * 100))
+            
+            # Generate star rating display
+            stars = int(round(product['ratings']))
+            star_html = ''.join(['<span class="star">★</span>' for _ in range(stars)])
+            if stars < 5:
+                star_html += ''.join(['<span class="star" style="color: #ddd;">★</span>' for _ in range(5 - stars)])
+            
+            st.markdown(f"""
+            <div class="product-card">
+                <span class="badge top-badge">TOP {idx+1}</span>
+                <div class="product-img">
+                    <img src="{product['Image']}" onerror="this.style.display='none'; this.parentNode.innerHTML='<div class=\\'no-image\\'>Image not available</div>';">
+                </div>
+                <div class="category-tag">{product['Category']}</div>
+                <div class="product-title">{product['Title'][:50]}{'...' if len(product['Title']) > 50 else ''}</div>
+                <div class="price">
+                    <span class="original-price">${product['Price']:.2f}</span>
+                    <span class="discounted-price">${product['Price1']:.2f}</span>
+                    <span class="discount-badge">{discount_percent}% OFF</span>
+                </div>
+                <div class="rating">
+                    {star_html}
+                    <span class="review-count">({product['review_counts']})</span>
+                </div>
+                <div style="font-size: 12px; color: #666; margin: 5px 0;">{product['sales_count']} sold</div>
+                <div class="footer-buttons">
+                    <a href="{safe_get_value(product, 'Title_URL')}" target="_blank">Details</a>
+                    <button onclick="window.open('{safe_get_value(product, 'Type_URL')}', '_blank')">Add to Cart</button>
+                </div>
             </div>
-            <div class="category-tag">{product['Category']}</div>
-            <h4 style="margin: 5px 0 8px; font-size: 15px; line-height: 1.3;">{product['Title'][:40]}{'...' if len(product['Title']) > 40 else ''}</h4>
-            <div class="price">
-                <span class="original-price">${product['Price']:.2f}</span>
-                <span class="discounted-price">${product['Price1']:.2f}</span>
-                <span class="discount-badge">{discount_percent}% OFF</span>
-            </div>
-            <div class="rating">
-                {star_html}
-                <span class="review-count">({product['review_counts']})</span>
-            </div>
-            <div style="font-size: 12px; color: #666; margin: 5px 0;">{product['sales_count']} sold</div>
-            <button onclick="window.open('{product['Image'].replace('https://surgicalmart.com/wp-content/uploads/', 'https://surgicalmart.com/shop/').rsplit('/', 1)[0]}', '_blank')" style="width: 100%; background: var(--primary); color: white; border: none; padding: 5px 0; border-radius: 4px; font-size: 14px; cursor: pointer; margin-top: 10px;">View Details</button>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("""
-    </div>
-    """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 else:
     st.warning("No trending products available with valid images.")
 
@@ -414,8 +531,8 @@ for idx, category in enumerate(categories[:4]):
             <div style="text-align: center; cursor: pointer; padding: 15px; border-radius: 8px; background: white; border: 1px solid #eee; transition: all 0.3s;" 
                  onMouseOver="this.style.boxShadow='0 5px 15px rgba(0,0,0,0.1)'; this.style.borderColor='var(--accent)';" 
                  onMouseOut="this.style.boxShadow='none'; this.style.borderColor='#eee';"
-                 onclick="window.open('{product['Title_URL']}', '_blank')">
-                <img src="{product['Image']}" style="width: 100%; height: 100px; object-fit: contain; margin-bottom: 10px;" onerror="this.style.display='none'; this.parentNode.innerHTML='<div class=\\'no-image\\' style=\\'height:100px\\'>No Image</div>';">
+                 onclick="window.open('{safe_get_value(product, 'Title_URL')}', '_blank')">
+                <img src="{safe_get_value(product, 'Image')}" onerror="this.style.display='none'; this.parentNode.innerHTML='<div class=\\'no-image\\' style=\\'height:100px\\'>No Image</div>';" style="width: 100%; height: 100px; object-fit: contain; margin-bottom: 10px;">
                 <p style="font-weight: bold; margin: 0; color: var(--primary);">{category}</p>
                 <p style="margin: 0; font-size: 12px; color: #666;">{len(df[df['Category'] == category])} products</p>
             </div>
@@ -434,29 +551,24 @@ st.markdown('<a name="shop"></a>', unsafe_allow_html=True)
 st.subheader("📦 Browse All Products")
 
 # Filters
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    category_filter = st.selectbox("Category", ["All"] + sorted(list(df['Category'].unique())), key="category_filter")
-with col2:
-    price_range = st.slider(
-        "Price Range ($)",
-        min_value=int(df['discounted_price'].min()),
-        max_value=int(df['discounted_price'].max()) + 1,
-        value=(int(df['discounted_price'].min()), int(df['discounted_price'].max())),
-        key="price_filter"
-    )
-with col3:
-    sort_option = st.selectbox(
-        "Sort By",
-        ["Recommended", "Price: Low to High", "Price: High to Low", "Discount %", "Popularity"],
-        key="sort_filter"
-    )
-with col4:
-    items_per_page = st.selectbox(
-        "Items per page",
-        [6, 12, 24],
-        key="pagination"
-    )
+category_filter = st.sidebar.selectbox("Category", ["All"] + sorted(list(df['Category'].unique())), key="category_filter")
+price_range = st.sidebar.slider(
+    "Price Range ($)",
+    min_value=int(df['discounted_price'].min()),
+    max_value=int(df['discounted_price'].max()) + 1,
+    value=(int(df['discounted_price'].min()), int(df['discounted_price'].max())),
+    key="price_filter"
+)
+sort_option = st.sidebar.selectbox(
+    "Sort By",
+    ["Recommended", "Price: Low to High", "Price: High to Low", "Discount %", "Popularity"],
+    key="sort_filter"
+)
+items_per_page = st.sidebar.selectbox(
+    "Items per page",
+    [6, 12, 24],
+    key="pagination"
+)
 
 # Apply filters
 filtered_df = df.copy()
@@ -506,20 +618,20 @@ if not paginated_df.empty:
             st.markdown(f"""
             <div class="product-card">
                 {badge}
-                <div style="position: relative; height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-                    <img src="{product['Image']}" style="max-width: 100%; max-height: 180px; object-fit: contain; border-radius: 5px;" onerror="this.style.display='none'; this.parentNode.innerHTML='<div class=\\'no-image\\'>Image not available</div>';">
+                <div class="product-img">
+                    <img src="{product['Image']}" onerror="this.style.display='none'; this.parentNode.innerHTML='<div class=\\'no-image\\'>Image not available</div>';">
                 </div>
                 <div class="category-tag">{product['Category']}</div>
-                <h4 style="margin: 5px 0 10px; font-size: 16px; line-height: 1.3;">{product['Title'][:50]}{'...' if len(product['Title']) > 50 else ''}</h4>
+                <div class="product-title">{product['Title'][:50]}{'...' if len(product['Title']) > 50 else ''}</div>
                 <div class="price">
                     <span class="original-price">${product['Price']:.2f}</span>
                     <span class="discounted-price">${product['discounted_price']:.2f}</span>
                     <span class="discount-badge">{discount_percent}% OFF</span>
                 </div>
-                {f'<div style="font-size: 12px; color: #666; margin: 5px 0;">Size: {product["Dimensions"]}</div>' if str(product["Dimensions"]) != "Not specified" else ""}
-                <div style="display: flex; justify-content: space-between; margin-top: 15px;">
-                    <a href="{product['Title_URL']}" target="_blank" style="text-decoration: none; color: var(--primary); font-size: 14px; font-weight: 500;">Details</a>
-                    <button onclick="window.open('{product['Type_URL']}', '_blank')" style="background: var(--primary); color: white; border: none; padding: 5px 15px; border-radius: 4px; font-size: 14px; cursor: pointer;">Add to Cart</button>
+                <div style="font-size: 12px; color: #666; margin: 5px 0;">Size: {product.get("Dimensions", "Not specified")}</div>
+                <div class="footer-buttons">
+                    <a href="{safe_get_value(product, 'Title_URL')}" target="_blank">Details</a>
+                    <button onclick="window.open('{safe_get_value(product, 'Type_URL')}', '_blank')">Add to Cart</button>
                 </div>
             </div>
             """, unsafe_allow_html=True)
